@@ -1,0 +1,975 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบร้านผัก</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;color:#222;font-family:Arial,sans-serif}
+header{background:#fff;padding:20px 5%;border-bottom:1px solid #ddd}
+header h2{margin:0}
+nav{display:flex;gap:10px;padding:15px 5%;background:#fff;overflow:auto}
+button{border:1px solid #ddd;background:white;padding:12px 18px;border-radius:10px;font-size:15px;cursor:pointer}
+button.active,.primary{background:#315efb;color:white;border-color:#315efb}
+main{max-width:1000px;margin:20px auto;padding:0 15px}
+.card{background:white;border:1px solid #e2e2e2;border-radius:16px;padding:20px;margin-bottom:16px}
+h3{margin:0 0 16px}
+input,select{width:100%;padding:13px;border:1px solid #ddd;border-radius:10px;font-size:16px;background:#fff}
+label{display:block;font-size:14px;color:#666;margin-bottom:7px}
+.field{margin-bottom:14px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 6px;border-bottom:1px solid #eee}
+th{font-size:13px;color:#777}
+.total{font-size:27px;font-weight:bold}
+.muted{color:#888;font-size:13px}
+.row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{background:#f7f8fa;padding:15px;border-radius:12px}
+.stat strong{display:block;font-size:22px;margin-top:8px}
+.hidden{display:none}
+.danger{color:#c33}
+.edit-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:12px}
+.edit-btn{background:#315efb;color:white;border:0;padding:8px 12px}
+.pdf-btn{background:#198754;color:white;border:0;padding:8px 12px}
+.sale-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sale-actions button{flex:1;min-width:100px}
+@media(max-width:600px){
+ .row,.edit-row{grid-template-columns:1fr 1fr}
+ .stats{grid-template-columns:1fr}
+ table{font-size:13px}
+}
+@media print{
+ nav,button{display:none!important}
+ body{background:white}
+ .card{border:0}
+}
+</style>
+</head>
+<body>
+
+<header>
+<h2>🥬 ระบบร้านผัก</h2>
+<div class="muted">ระบบบันทึกยอดขายและต้นทุนรายวัน</div>
+</header>
+
+<nav>
+<button class="active" onclick="showPage('sale',this)">หน้าขาย</button>
+<button onclick="showPage('price',this)">ราคาประจำวัน</button>
+<button onclick="showPage('summary',this)">สรุปยอด</button>
+</nav>
+
+<main>
+
+<section id="sale">
+<div class="card">
+<h3>สร้างรายการขาย</h3>
+<div class="field">
+<label>วันที่ขาย</label>
+<input type="date" id="saleDate" onchange="refreshPage()">
+</div>
+<div class="field">
+<label>ชื่อลูกค้า (ไม่บังคับ)</label>
+<input id="customer" placeholder="ชื่อลูกค้า / ลูกค้าขาจร">
+</div>
+</div>
+
+<div class="card">
+<h3>รายการสินค้า</h3>
+<div id="saleRows"></div>
+<button onclick="addSaleRow()" style="width:100%">+ เพิ่มรายการผัก</button>
+</div>
+
+<div class="card">
+<div class="muted">ยอดรวม</div>
+<div class="total" id="saleTotal">0 บาท</div>
+<div style="display:flex;gap:10px;margin-top:18px">
+<button class="primary" style="flex:1" onclick="saveSale()">บันทึกยอดขาย</button>
+<button onclick="clearSale()">ใบใหม่</button>
+</div>
+</div>
+</section>
+
+<section id="price" class="hidden">
+<div class="card">
+<h3>ตั้งราคาประจำวัน</h3>
+<div class="field">
+<label>เลือกวันที่</label>
+<input type="date" id="priceDate" onchange="loadPrices()">
+</div>
+<p class="muted">ราคาทุนและราคาขายสามารถเปลี่ยนใหม่ได้ทุกวัน ราคาที่บันทึกขายแล้วจะไม่เปลี่ยนตาม</p>
+<table>
+<thead>
+<tr>
+<th>สินค้า</th>
+<th>ราคาทุน</th>
+<th>ราคาขายหน้าร้าน</th>
+<th>จัดการ</th>
+</tr>
+</thead>
+<tbody id="priceRows"></tbody>
+</table>
+<button onclick="addProduct()" style="width:100%;margin-top:15px">+ เพิ่มรายการสินค้า</button>
+<button class="primary" style="width:100%;margin-top:18px" onclick="savePrices()">บันทึกราคาประจำวัน</button>
+</div>
+</section>
+
+<section id="summary" class="hidden">
+
+<div class="card">
+<h3>สรุปยอดประจำวัน</h3>
+<div class="field">
+<label>เลือกวันที่ต้องการดู</label>
+<input type="date" id="summaryDate" onchange="loadSummary()">
+</div>
+<div class="stats">
+<div class="stat">ยอดขาย<strong id="sumSales">0</strong></div>
+<div class="stat">ต้นทุน<strong id="sumCost">0</strong></div>
+<div class="stat">กำไรจากสินค้า<strong id="sumProfit">0</strong></div>
+</div>
+</div>
+
+<div class="card">
+<h3>รายการขายวันนี้</h3>
+<div id="salesHistory"></div>
+<button onclick="clearSalesHistory()" style="background:#dc3545;color:white;width:100%;margin-top:15px">
+ลบยอดขายของวันที่เลือก
+</button>
+</div>
+
+<div class="card hidden" id="editSaleArea">
+<h3>✏️ แก้ไขบิลขาย</h3>
+
+<div class="field">
+<label>ชื่อลูกค้า</label>
+<input id="editCustomer" placeholder="ชื่อลูกค้า">
+</div>
+
+<h3>รายการสินค้าในบิล</h3>
+<div id="editSaleRows"></div>
+
+<button onclick="addEditSaleRow()" style="width:100%;margin-bottom:18px">
++ เพิ่มสินค้าในบิล
+</button>
+
+<div class="muted">ยอดรวมใหม่</div>
+<div class="total" id="editSaleTotal">0 บาท</div>
+
+<div style="display:flex;gap:10px;margin-top:18px">
+<button class="primary" style="flex:1" onclick="saveEditSale()">บันทึกการแก้ไข</button>
+<button onclick="cancelEditSale()">ยกเลิก</button>
+</div>
+</div>
+
+</section>
+</main>
+
+<script>
+const initialProducts=[];
+
+let products=JSON.parse(localStorage.getItem("veg_products"))||initialProducts;
+let prices=JSON.parse(localStorage.getItem("veg_prices"))||{};
+let sales=JSON.parse(localStorage.getItem("veg_sales"))||[];
+
+let editingSaleId=null;
+
+const today=new Date().toLocaleDateString("en-CA");
+
+document.getElementById("saleDate").value=today;
+document.getElementById("priceDate").value=today;
+document.getElementById("summaryDate").value=today;
+
+function money(n){
+ return Number(n||0).toLocaleString("th-TH",{maximumFractionDigits:2})+" บาท";
+}
+
+function escapeHTML(value){
+ return String(value??"").replace(/[&<>"']/g,function(c){
+  return {
+   "&":"&amp;",
+   "<":"&lt;",
+   ">":"&gt;",
+   '"':"&quot;",
+   "'":"&#39;"
+  }[c];
+ });
+}
+
+function showPage(page,btn){
+ document.querySelectorAll("main section").forEach(s=>s.classList.add("hidden"));
+ document.getElementById(page).classList.remove("hidden");
+
+ document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+ btn.classList.add("active");
+
+ if(page==="price")loadPrices();
+ if(page==="summary")loadSummary();
+ if(page==="sale")refreshPage();
+}
+
+function getPrices(date){
+ if(!prices[date]){
+  let previous=Object.keys(prices).sort().filter(d=>d<date).pop();
+
+  prices[date]={};
+
+  products.forEach(p=>{
+   prices[date][p.id]=previous&&prices[previous][p.id]
+    ?{...prices[previous][p.id]}
+    :{cost:0,sale:0};
+  });
+ }
+ return prices[date];
+}
+
+// ========================
+// จัดการสินค้า
+// ========================
+
+function deleteProduct(id){
+ let product=products.find(p=>p.id===id);
+ if(!product)return;
+
+ if(!confirm("ต้องการลบสินค้า "+product.name+" ใช่ไหม?"))return;
+
+ products=products.filter(p=>p.id!==id);
+
+ localStorage.setItem("veg_products",JSON.stringify(products));
+
+ loadPrices();
+ alert("ลบสินค้าเรียบร้อยแล้ว");
+}
+
+function loadPrices(){
+ let date=document.getElementById("priceDate").value;
+ let data=getPrices(date);
+
+ document.getElementById("priceRows").innerHTML=products.map(p=>{
+  let v=data[p.id]||{cost:0,sale:0};
+
+  return `<tr>
+  <td>${escapeHTML(p.name)}</td>
+  <td><input type="number" min="0" id="cost${p.id}" value="${v.cost}"></td>
+  <td><input type="number" min="0" id="price${p.id}" value="${v.sale}"></td>
+  <td>
+   <button onclick="deleteProduct(${p.id})" style="background:#dc3545;color:white;padding:6px 12px">ลบ</button>
+  </td>
+  </tr>`;
+ }).join("");
+}
+
+function savePrices(){
+ let date=document.getElementById("priceDate").value;
+ if(!date)return alert("กรุณาเลือกวันที่");
+
+ prices[date]={};
+
+ products.forEach(p=>{
+  prices[date][p.id]={
+   cost:Number(document.getElementById("cost"+p.id).value)||0,
+   sale:Number(document.getElementById("price"+p.id).value)||0
+  };
+ });
+
+ localStorage.setItem("veg_prices",JSON.stringify(prices));
+
+ alert("บันทึกราคาประจำวันแล้ว");
+ refreshPage();
+}
+
+function addProduct(){
+ let name=prompt("กรอกชื่อสินค้าใหม่");
+ if(!name||!name.trim())return;
+
+ name=name.trim();
+
+ if(products.some(p=>p.name.toLowerCase()===name.toLowerCase())){
+  alert("มีสินค้านี้อยู่แล้ว");
+  return;
+ }
+
+ let id=Math.max(0,...products.map(p=>p.id))+1;
+
+ products.push({id,name});
+
+ localStorage.setItem("veg_products",JSON.stringify(products));
+
+ loadPrices();
+
+ alert("เพิ่มสินค้า "+name+" เรียบร้อยแล้ว");
+}
+
+// ========================
+// หน้าขาย
+// ========================
+
+function addSaleRow(){
+ let container=document.getElementById("saleRows");
+ let div=document.createElement("div");
+
+ div.className="row sale-row";
+
+ div.innerHTML=`
+ <div class="field">
+ <label>สินค้า</label>
+ <select class="product" onchange="updateRow(this)">
+ <option value="">เลือกสินค้า</option>
+ ${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}
+ </select>
+ </div>
+ <div class="field">
+ <label>จำนวน</label>
+ <input class="qty" type="number" min="0" value="1" oninput="calculate()">
+ </div>
+ <div class="field">
+ <label>ราคาขาย</label>
+ <input class="unit-price" type="number" min="0" value="0" oninput="calculate()">
+ </div>
+ <div class="field">
+ <label>รวม</label>
+ <div class="line-total" style="padding:13px 0;font-weight:bold">0</div>
+ <button class="danger" onclick="this.closest('.sale-row').remove();calculate()">ลบ</button>
+ </div>`;
+
+ container.appendChild(div);
+}
+
+function updateRow(select){
+ let date=document.getElementById("saleDate").value;
+ let data=getPrices(date);
+ let p=data[select.value];
+
+ let row=select.closest(".sale-row");
+
+ row.querySelector(".unit-price").value=p?p.sale:0;
+
+ calculate();
+}
+
+function calculate(){
+ let total=0;
+
+ document.querySelectorAll(".sale-row").forEach(row=>{
+  let qty=Number(row.querySelector(".qty").value)||0;
+  let price=Number(row.querySelector(".unit-price").value)||0;
+
+  let line=qty*price;
+
+  row.querySelector(".line-total").textContent=money(line);
+
+  total+=line;
+ });
+
+ document.getElementById("saleTotal").textContent=money(total);
+
+ return total;
+}
+
+function refreshPage(){
+ document.getElementById("saleRows").innerHTML="";
+ addSaleRow();
+ calculate();
+}
+
+function clearSale(){
+ document.getElementById("customer").value="";
+ refreshPage();
+}
+
+function saveSale(){
+ let date=document.getElementById("saleDate").value;
+ if(!date)return alert("กรุณาเลือกวันที่");
+
+ let rows=[];
+
+ document.querySelectorAll(".sale-row").forEach(row=>{
+  let id=Number(row.querySelector(".product").value);
+  let qty=Number(row.querySelector(".qty").value)||0;
+  let price=Number(row.querySelector(".unit-price").value)||0;
+
+  if(id&&qty>0){
+   let p=products.find(x=>x.id===id);
+   let daily=getPrices(date)[id]||{cost:0,sale:0};
+
+   if(p){
+    rows.push({
+     productId:id,
+     name:p.name,
+     qty,
+     cost:daily.cost,
+     price,
+     total:qty*price
+    });
+   }
+  }
+ });
+
+ if(!rows.length)return alert("กรุณาเลือกสินค้าและจำนวน");
+
+ let total=rows.reduce((s,r)=>s+r.total,0);
+
+ sales.push({
+  id:Date.now(),
+  date,
+  customer:document.getElementById("customer").value||"ลูกค้าขาจร",
+  rows,
+  total,
+  cost:rows.reduce((s,r)=>s+r.cost*r.qty,0)
+ });
+
+ localStorage.setItem("veg_sales",JSON.stringify(sales));
+
+ alert("บันทึกยอดขายแล้ว");
+
+ clearSale();
+}
+
+// ========================
+// ลบยอดขายตามวันที่เลือก
+// ========================
+
+function clearSalesHistory(){
+ let date=document.getElementById("summaryDate").value;
+
+ if(!date)return alert("กรุณาเลือกวันที่");
+
+ if(!confirm("ต้องการลบยอดขายวันที่ "+date+" ทั้งหมดใช่ไหม?"))return;
+
+ sales=sales.filter(s=>s.date!==date);
+
+ localStorage.setItem("veg_sales",JSON.stringify(sales));
+
+ cancelEditSale();
+ loadSummary();
+
+ alert("ลบยอดขายวันที่ "+date+" เรียบร้อยแล้ว");
+}
+
+// ========================
+// ระบบแก้ไขบิล
+// ========================
+
+function editSale(id){
+ let sale=sales.find(s=>s.id===id);
+ if(!sale)return;
+
+ editingSaleId=id;
+
+ document.getElementById("editSaleArea").classList.remove("hidden");
+ document.getElementById("editCustomer").value=sale.customer;
+ document.getElementById("editSaleRows").innerHTML="";
+
+ sale.rows.forEach(r=>{
+  createEditRow(r.productId,r.name,r.qty,r.price,r.cost);
+ });
+
+ calculateEditSale();
+
+ document.getElementById("editSaleArea").scrollIntoView({
+  behavior:"smooth",
+  block:"start"
+ });
+}
+
+function createEditRow(id,name,qty,price,cost){
+ let container=document.getElementById("editSaleRows");
+ let div=document.createElement("div");
+
+ div.className="edit-row edit-sale-row";
+
+ let options=products.map(p=>
+  `<option value="${p.id}" ${p.id==id?"selected":""}>${escapeHTML(p.name)}</option>`
+ ).join("");
+
+ if(!products.some(p=>p.id==id)){
+  options+=`<option value="${id}" selected>${escapeHTML(name)}</option>`;
+ }
+
+ div.innerHTML=`
+ <div class="field">
+ <label>สินค้า</label>
+ <select class="edit-product" onchange="changeEditProduct(this)">
+ <option value="">เลือกสินค้า</option>
+ ${options}
+ </select>
+ </div>
+ <div class="field">
+ <label>จำนวน</label>
+ <input class="edit-qty" type="number" min="0" value="${qty}" oninput="calculateEditSale()">
+ </div>
+ <div class="field">
+ <label>ราคาขาย</label>
+ <input class="edit-price" type="number" min="0" value="${price}" oninput="calculateEditSale()">
+ </div>
+ <div class="field">
+ <label>รวม</label>
+ <div class="edit-line-total" style="padding:13px 0;font-weight:bold">0</div>
+ <button class="danger" onclick="this.closest('.edit-sale-row').remove();calculateEditSale()">ลบ</button>
+ <input type="hidden" class="edit-cost" value="${cost}">
+ </div>`;
+
+ container.appendChild(div);
+}
+
+function addEditSaleRow(){
+ let sale=sales.find(s=>s.id===editingSaleId);
+ if(!sale)return;
+
+ let div=document.createElement("div");
+
+ div.className="edit-sale-row edit-row";
+
+ div.innerHTML=`
+ <div class="field">
+ <label>สินค้า</label>
+ <select class="edit-product" onchange="changeEditProduct(this)">
+ <option value="">เลือกสินค้า</option>
+ ${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}
+ </select>
+ </div>
+ <div class="field">
+ <label>จำนวน</label>
+ <input class="edit-qty" type="number" min="0" value="1" oninput="calculateEditSale()">
+ </div>
+ <div class="field">
+ <label>ราคาขาย</label>
+ <input class="edit-price" type="number" min="0" value="0" oninput="calculateEditSale()">
+ </div>
+ <div class="field">
+ <label>รวม</label>
+ <div class="edit-line-total" style="padding:13px 0;font-weight:bold">0</div>
+ <button class="danger" onclick="this.closest('.edit-sale-row').remove();calculateEditSale()">ลบ</button>
+ <input type="hidden" class="edit-cost" value="0">
+ </div>`;
+
+ document.getElementById("editSaleRows").appendChild(div);
+
+ calculateEditSale();
+}
+
+function changeEditProduct(select){
+ let sale=sales.find(s=>s.id===editingSaleId);
+ if(!sale)return;
+
+ let daily=getPrices(sale.date);
+ let data=daily[select.value]||{cost:0,sale:0};
+
+ let row=select.closest(".edit-sale-row");
+
+ row.querySelector(".edit-price").value=data.sale;
+ row.querySelector(".edit-cost").value=data.cost;
+
+ calculateEditSale();
+}
+
+function calculateEditSale(){
+ let total=0;
+
+ document.querySelectorAll(".edit-sale-row").forEach(row=>{
+  let qty=Number(row.querySelector(".edit-qty").value)||0;
+  let price=Number(row.querySelector(".edit-price").value)||0;
+
+  let line=qty*price;
+
+  row.querySelector(".edit-line-total").textContent=money(line);
+
+  total+=line;
+ });
+
+ document.getElementById("editSaleTotal").textContent=money(total);
+
+ return total;
+}
+
+function saveEditSale(){
+ let sale=sales.find(s=>s.id===editingSaleId);
+ if(!sale)return;
+
+ let rows=[];
+
+ document.querySelectorAll(".edit-sale-row").forEach(row=>{
+  let id=Number(row.querySelector(".edit-product").value);
+  let qty=Number(row.querySelector(".edit-qty").value)||0;
+  let price=Number(row.querySelector(".edit-price").value)||0;
+  let cost=Number(row.querySelector(".edit-cost").value)||0;
+
+  if(id&&qty>0){
+   let p=products.find(x=>x.id===id);
+   let oldRow=sale.rows.find(r=>r.productId===id);
+   let name=p?p.name:(oldRow?oldRow.name:"สินค้า");
+
+   rows.push({
+    productId:id,
+    name,
+    qty,
+    cost,
+    price,
+    total:qty*price
+   });
+  }
+ });
+
+ if(!rows.length)return alert("กรุณาเลือกสินค้าและจำนวน");
+
+ sale.customer=document.getElementById("editCustomer").value.trim()||"ลูกค้าขาจร";
+ sale.rows=rows;
+ sale.total=rows.reduce((s,r)=>s+r.total,0);
+ sale.cost=rows.reduce((s,r)=>s+r.cost*r.qty,0);
+
+ localStorage.setItem("veg_sales",JSON.stringify(sales));
+
+ editingSaleId=null;
+
+ document.getElementById("editSaleArea").classList.add("hidden");
+
+ loadSummary();
+
+ alert("แก้ไขบิลเรียบร้อยแล้ว");
+}
+
+function cancelEditSale(){
+ editingSaleId=null;
+
+ document.getElementById("editSaleArea").classList.add("hidden");
+ document.getElementById("editSaleRows").innerHTML="";
+}
+
+// ========================
+// ระบบสร้าง PDF รายบิล
+// ========================
+
+function printBill(id){
+ let sale=sales.find(s=>s.id===id);
+ if(!sale)return alert("ไม่พบบิลที่ต้องการ");
+
+ let win=window.open("","_blank");
+
+ if(!win){
+  alert("กรุณาอนุญาตให้เว็บไซต์เปิดหน้าต่างใหม่ (Popup)");
+  return;
+ }
+
+ let itemCount=sale.rows.length;
+
+ // เลือกจำนวนชุดคอลัมน์และขนาดตัวอักษร
+ let groupCount;
+ let fontSize;
+
+ if(itemCount<=25){
+  groupCount=1;
+  fontSize=12;
+ }else if(itemCount<=50){
+  groupCount=2;
+  fontSize=11;
+ }else{
+  groupCount=3;
+  fontSize=10;
+ }
+
+ // แบ่งรายการเป็นชุดซ้าย กลาง ขวา
+ // แต่ละชุดเรียงจากบนลงล่าง
+ let perColumn=Math.ceil(itemCount/groupCount);
+ let groups=[];
+
+ for(let i=0;i<groupCount;i++){
+  groups.push(
+   sale.rows.slice(i*perColumn,(i+1)*perColumn)
+  );
+ }
+
+ // สร้างแถวตารางตามจำนวนชุด
+ let tableRows="";
+
+ for(let rowIndex=0;rowIndex<perColumn;rowIndex++){
+  tableRows+="<tr>";
+
+  for(let groupIndex=0;groupIndex<groupCount;groupIndex++){
+   let item=groups[groupIndex][rowIndex];
+
+   if(item){
+    tableRows+=`
+     <td class="product-name">${escapeHTML(item.name)}</td>
+     <td class="qty">${Number(item.qty).toLocaleString("th-TH")}</td>
+     <td class="amount">${Number(item.total).toLocaleString("th-TH",{maximumFractionDigits:2})}</td>
+    `;
+   }else{
+    tableRows+=`
+     <td></td>
+     <td></td>
+     <td></td>
+    `;
+   }
+  }
+
+  tableRows+="</tr>";
+ }
+
+ // ความกว้างของแต่ละชุด
+ let groupWidth=100/groupCount;
+ let nameWidth=groupWidth*0.66;
+ let qtyWidth=groupWidth*0.14;
+ let amountWidth=groupWidth*0.20;
+
+ let colHTML="";
+
+ for(let i=0;i<groupCount;i++){
+  colHTML+=`
+   <col style="width:${nameWidth}%">
+   <col style="width:${qtyWidth}%">
+   <col style="width:${amountWidth}%">
+  `;
+ }
+
+ // ดึงเลขวันจากวันที่ขาย
+ let dateParts=String(sale.date).split("-");
+ let day=dateParts.length===3?Number(dateParts[2]):"";
+
+ let totalSales=Number(sale.total)||0;
+
+ let html=`
+ <!DOCTYPE html>
+ <html lang="th">
+ <head>
+ <meta charset="UTF-8">
+ <title>บิลขาย - ${escapeHTML(sale.customer)}</title>
+
+ <style>
+ @page{
+  size:A4 portrait;
+  margin:8mm;
+ }
+
+ *{
+  box-sizing:border-box;
+ }
+
+ html,body{
+  margin:0;
+  padding:0;
+ }
+
+ body{
+  font-family:Tahoma,Arial,sans-serif;
+  color:#222;
+  font-size:${fontSize}pt;
+ }
+
+ .bill{
+  width:100%;
+ }
+
+ .bill-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:48px;
+  margin-bottom:8px;
+  position:relative;
+ }
+
+ .date-box{
+  width:65px;
+  flex-shrink:0;
+ }
+
+ .day{
+  font-size:32pt;
+  font-weight:bold;
+  line-height:1;
+  text-align:left;
+ }
+
+ .full-date{
+  font-size:8pt;
+  color:#777;
+  margin-top:4px;
+ }
+
+ .customer{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  width:60%;
+  text-align:center;
+  font-size:17pt;
+  font-weight:bold;
+  overflow-wrap:anywhere;
+ }
+
+ .header-space{
+  width:65px;
+  flex-shrink:0;
+ }
+
+ .line{
+  border-top:1px solid #777;
+  margin:7px 0 10px;
+ }
+
+ table{
+  width:100%;
+  table-layout:fixed;
+  border-collapse:collapse;
+ }
+
+ td{
+  border-bottom:1px solid #e2e2e2;
+  padding:3px 3px;
+  font-size:${fontSize}pt;
+  line-height:1.2;
+  vertical-align:middle;
+ }
+
+ .product-name{
+  text-align:left;
+  overflow-wrap:anywhere;
+  word-break:normal;
+ }
+
+ .qty{
+  text-align:center;
+  white-space:nowrap;
+ }
+
+ .amount{
+  text-align:right;
+  white-space:nowrap;
+ }
+
+ .total-area{
+  margin-top:10px;
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:15px;
+  page-break-inside:avoid;
+ }
+
+ .total-label{
+  font-size:11pt;
+  font-weight:bold;
+ }
+
+ .total-value{
+  font-size:18pt;
+  font-weight:bold;
+  white-space:nowrap;
+ }
+
+ @media print{
+  body{
+   -webkit-print-color-adjust:exact;
+   print-color-adjust:exact;
+  }
+
+  .bill{
+   page-break-inside:avoid;
+  }
+ }
+ </style>
+ </head>
+
+ <body>
+ <div class="bill">
+
+  <div class="bill-header">
+   <div class="date-box">
+    <div class="day">${day}</div>
+    <div class="full-date">${escapeHTML(sale.date)}</div>
+   </div>
+
+   <div class="customer">${escapeHTML(sale.customer)}</div>
+
+   <div class="header-space"></div>
+  </div>
+
+  <div class="line"></div>
+
+  <table>
+   <colgroup>
+    ${colHTML}
+   </colgroup>
+
+   <tbody>
+    ${tableRows}
+   </tbody>
+  </table>
+
+  <div class="line"></div>
+
+  <div class="total-area">
+   <div class="total-label">รวมราคาทั้งหมด</div>
+   <div class="total-value">
+    ${totalSales.toLocaleString("th-TH",{maximumFractionDigits:2})} บาท
+   </div>
+  </div>
+
+ </div>
+
+ <script>
+ window.onload=function(){
+  window.focus();
+  window.print();
+ };
+ <\/script>
+
+ </body>
+ </html>
+ `;
+
+ win.document.open();
+ win.document.write(html);
+ win.document.close();
+}
+
+// ========================
+// สรุปยอด
+// ========================
+
+function loadSummary(){
+ let date=document.getElementById("summaryDate").value;
+
+ let list=sales.filter(s=>s.date===date);
+
+ let total=list.reduce((s,x)=>s+(Number(x.total)||0),0);
+ let cost=list.reduce((s,x)=>s+(Number(x.cost)||0),0);
+
+ document.getElementById("sumSales").textContent=money(total);
+ document.getElementById("sumCost").textContent=money(cost);
+ document.getElementById("sumProfit").textContent=money(total-cost);
+
+ document.getElementById("salesHistory").innerHTML=list.length
+ ?list.map(s=>`
+ <div style="padding:12px 0;border-bottom:1px solid #eee">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+   <strong>${escapeHTML(s.customer)}</strong>
+   <strong>${money(s.total)}</strong>
+  </div>
+
+  <div class="muted" style="margin-top:6px">
+   ${s.rows.map(r=>escapeHTML(r.name)+" "+r.qty+" × "+r.price).join(" / ")}
+  </div>
+
+  <div class="sale-actions">
+   <button class="edit-btn" onclick="editSale(${s.id})">
+    ✏️ แก้ไขบิล
+   </button>
+   <button class="pdf-btn" onclick="printBill(${s.id})">
+    📄 PDF
+   </button>
+  </div>
+
+ </div>
+ `).join("")
+ :"ยังไม่มีรายการขายในวันนี้";
+}
+
+// เริ่มต้นระบบ
+refreshPage();
+loadPrices();
+</script>
+
+</body>
+</html>
