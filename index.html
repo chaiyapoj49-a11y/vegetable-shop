@@ -30,6 +30,7 @@ th{font-size:13px;color:#777}
 .stat strong{display:block;font-size:22px;margin-top:8px}
 .hidden{display:none}
 .danger{color:#c33}
+.loss{color:#dc3545;font-weight:bold}
 .edit-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:12px}
 .edit-btn{background:#315efb;color:white;border:0;padding:8px 12px}
 .pdf-btn{background:#198754;color:white;border:0;padding:8px 12px}
@@ -308,15 +309,23 @@ function addSaleRow(){
  let container=document.getElementById("saleRows");
  let div=document.createElement("div");
 
+ let listId="product-list-"+Date.now()+"-"+Math.random().toString(36).slice(2);
+
  div.className="row sale-row";
 
  div.innerHTML=`
  <div class="field">
- <label>สินค้า</label>
- <select class="product" onchange="updateRow(this)">
- <option value="">เลือกสินค้า</option>
- ${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}
- </select>
+ <label>ค้นหาสินค้า</label>
+ <input class="product-search" type="text"
+ list="${listId}"
+ placeholder="พิมพ์ชื่อผักเพื่อค้นหา"
+ onchange="updateRow(this)"
+ oninput="updateRow(this)"
+ autocomplete="off">
+ <datalist id="${listId}">
+ ${products.map(p=>`<option value="${escapeHTML(p.name)}"></option>`).join("")}
+ </datalist>
+ <input type="hidden" class="product" value="">
  </div>
  <div class="field">
  <label>จำนวน</label>
@@ -334,19 +343,29 @@ function addSaleRow(){
 
  container.appendChild(div);
 }
+function updateRow(input){
+ let row=input.closest(".sale-row");
+ let name=input.value.trim();
 
-function updateRow(select){
+ let product=products.find(p=>p.name.toLowerCase()===name.toLowerCase());
+
+ let hidden=row.querySelector(".product");
+
+ if(!product){
+  hidden.value="";
+  return;
+ }
+
+ hidden.value=product.id;
+
  let date=document.getElementById("saleDate").value;
  let data=getPrices(date);
- let p=data[select.value];
-
- let row=select.closest(".sale-row");
+ let p=data[product.id];
 
  row.querySelector(".unit-price").value=p?p.sale:0;
 
  calculate();
 }
-
 function calculate(){
  let total=0;
 
@@ -949,7 +968,11 @@ function loadSummary(){
   </div>
 
   <div class="muted" style="margin-top:6px">
-   ${s.rows.map(r=>escapeHTML(r.name)+" "+r.qty+" × "+r.price).join(" / ")}
+   ${s.rows.map(r=>`
+ <span class="${Number(r.price)<Number(r.cost)?'loss':''}">
+ ${escapeHTML(r.name)} ${r.qty} × ${r.price}
+ </span>
+`).join(" / ")}
   </div>
 
   <div class="sale-actions">
