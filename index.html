@@ -31,6 +31,34 @@ th{font-size:13px;color:#777}
 .hidden{display:none}
 .danger{color:#c33}
 .loss{color:#dc3545;font-weight:bold}
+.product-picker{position:relative;width:100%}
+.product-options{
+ display:none;
+ position:absolute;
+ top:100%;
+ left:0;
+ right:0;
+ background:white;
+ border:1px solid #ccc;
+ border-radius:10px;
+ max-height:220px;
+ overflow-y:auto;
+ -webkit-overflow-scrolling:touch;
+ z-index:999;
+ box-shadow:0 4px 10px rgba(0,0,0,.12);
+}
+.product-option{
+ display:block;
+ width:100%;
+ text-align:left;
+ border:0;
+ border-bottom:1px solid #eee;
+ border-radius:0;
+ background:white;
+ padding:13px;
+ font-size:16px;
+}
+.product-option:active{background:#eee}
 .edit-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;align-items:end;margin-bottom:12px}
 .edit-btn{background:#315efb;color:white;border:0;padding:8px 12px}
 .pdf-btn{background:#198754;color:white;border:0;padding:8px 12px}
@@ -309,32 +337,35 @@ function addSaleRow(){
  let container=document.getElementById("saleRows");
  let div=document.createElement("div");
 
- let listId="product-list-"+Date.now()+"-"+Math.random().toString(36).slice(2);
-
  div.className="row sale-row";
 
  div.innerHTML=`
  <div class="field">
  <label>ค้นหาสินค้า</label>
- <input class="product-search" type="text"
- list="${listId}"
- placeholder="พิมพ์ชื่อผักเพื่อค้นหา"
- onchange="updateRow(this)"
- oninput="updateRow(this)"
- autocomplete="off">
- <datalist id="${listId}">
- ${products.map(p=>`<option value="${escapeHTML(p.name)}"></option>`).join("")}
- </datalist>
- <input type="hidden" class="product" value="">
+ <div class="product-picker">
+  <input class="product-search"
+   type="text"
+   placeholder="แตะเพื่อเลือกหรือพิมพ์ชื่อผัก"
+   onfocus="showProductOptions(this)"
+   oninput="filterProductOptions(this)"
+   autocomplete="off">
+
+  <input type="hidden" class="product">
+
+  <div class="product-options"></div>
  </div>
+ </div>
+
  <div class="field">
  <label>จำนวน</label>
  <input class="qty" type="number" min="0" value="1" oninput="calculate()">
  </div>
+
  <div class="field">
  <label>ราคาขาย</label>
  <input class="unit-price" type="number" min="0" value="0" oninput="calculate()">
  </div>
+
  <div class="field">
  <label>รวม</label>
  <div class="line-total" style="padding:13px 0;font-weight:bold">0</div>
@@ -342,6 +373,66 @@ function addSaleRow(){
  </div>`;
 
  container.appendChild(div);
+}
+function showProductOptions(input){
+ renderProductOptions(input);
+}
+
+function filterProductOptions(input){
+ let row=input.closest(".sale-row");
+
+ row.querySelector(".product").value="";
+ row.querySelector(".unit-price").value=0;
+
+ renderProductOptions(input);
+ calculate();
+}
+
+function renderProductOptions(input){
+ let row=input.closest(".sale-row");
+ let box=row.querySelector(".product-options");
+ let keyword=input.value.trim().toLowerCase();
+
+ let found=products.filter(p=>
+  p.name.toLowerCase().includes(keyword)
+ );
+
+ if(found.length){
+  box.innerHTML=found.map(p=>`
+   <button type="button"
+    class="product-option"
+    onclick="selectSaleProduct(this,${p.id})">
+    ${escapeHTML(p.name)}
+   </button>
+  `).join("");
+ }else{
+  box.innerHTML=`
+   <div style="padding:13px;color:#888">
+    ไม่พบสินค้า
+   </div>`;
+ }
+
+ box.style.display="block";
+}
+
+function selectSaleProduct(button,id){
+ let row=button.closest(".sale-row");
+ let product=products.find(p=>p.id===id);
+
+ if(!product)return;
+
+ row.querySelector(".product-search").value=product.name;
+ row.querySelector(".product").value=product.id;
+
+ let date=document.getElementById("saleDate").value;
+ let data=getPrices(date);
+ let price=data[product.id];
+
+ row.querySelector(".unit-price").value=price?price.sale:0;
+
+ row.querySelector(".product-options").style.display="none";
+
+ calculate();
 }
 function updateRow(input){
  let row=input.closest(".sale-row");
